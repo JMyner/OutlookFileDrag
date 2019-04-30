@@ -8,11 +8,13 @@ using log4net;
 namespace OutlookFileDrag
 {
     //Class that wraps Outlook data object and adds support for CF_HDROP format
-    class OutlookDataObject : NativeMethods.IDataObject
+    class OutlookDataObject : NativeMethods.IDataObject, ICustomQueryInterface  
     {
         private NativeMethods.IDataObject innerData;
         private string[] tempFilenames;
         private static ILog log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+
+        public bool FilesDropped { get; private set; }
 
         public OutlookDataObject(NativeMethods.IDataObject innerData)
         {
@@ -21,6 +23,7 @@ namespace OutlookFileDrag
 
         public int EnumFormatEtc(DATADIR direction, out IEnumFORMATETC ppenumFormatEtc)
         {
+            IEnumFORMATETC origEnum = null;
             try
             {
                 log.DebugFormat("IDataObject.EnumFormatEtc called -- direction {0}", direction);
@@ -28,7 +31,6 @@ namespace OutlookFileDrag
                 {
                     case DATADIR.DATADIR_GET:
                         //Get original enumerator
-                        IEnumFORMATETC origEnum;
                         int result = innerData.EnumFormatEtc(direction, out origEnum);
                         if (result != NativeMethods.S_OK)
                         {
@@ -48,7 +50,6 @@ namespace OutlookFileDrag
                             if (cfFormat != NativeMethods.CF_TEXT && cfFormat != NativeMethods.CF_UNICODETEXT && cfFormat != (ushort)DataObjectHelper.GetClipboardFormat("Csv"))
                                 formats.Add(buffer[0]);
                         }
-                        Marshal.ReleaseComObject(origEnum);
 
                         //Add CF_HDROP format
                         FORMATETC format = new FORMATETC();
@@ -78,6 +79,12 @@ namespace OutlookFileDrag
                 log.Error("Exception in IDataObject.EnumFormatEtc", ex);
                 ppenumFormatEtc = null;
                 return NativeMethods.E_UNEXPECTED;
+            }
+            finally
+            {
+                //Release all unmanaged objects
+                if (origEnum != null)
+                    Marshal.ReleaseComObject(origEnum);
             }
         }
 
@@ -138,6 +145,7 @@ namespace OutlookFileDrag
                     //Get list of dropped files
                     log.Debug("Setting drop files");
                     DataObjectHelper.SetDropFiles(ref medium, tempFilenames);
+                    FilesDropped = true;
                     return NativeMethods.S_OK;
                 }
                 else if (format.cfFormat == NativeMethods.CF_TEXT || format.cfFormat == NativeMethods.CF_UNICODETEXT || format.cfFormat == (ushort)DataObjectHelper.GetClipboardFormat("Csv"))
@@ -267,5 +275,44 @@ namespace OutlookFileDrag
             }
         }
 
+        public CustomQueryInterfaceResult GetInterface(ref Guid iid, out IntPtr ppv)
+        {
+            ppv = IntPtr.Zero;
+            try
+            {
+                log.DebugFormat("Get COM interface {0}", iid);
+
+                //For IDataObject interface, use interface on this object
+                if (iid == new Guid("0000010E-0000-0000-C000-000000000046"))
+                {
+                    log.DebugFormat("Interface handled");
+                    return CustomQueryInterfaceResult.NotHandled;
+                }
+
+                else
+                {
+                    //For all other interfaces, use interface on original object
+                    IntPtr pUnk = Marshal.GetIUnknownForObject(this.innerData);
+                    int retVal = Marshal.QueryInterface(pUnk, ref iid, out ppv);
+                    if (retVal == NativeMethods.S_OK)
+                    {
+                        log.DebugFormat("Interface handled by inner object");
+                        return CustomQueryInterfaceResult.Handled;
+                    }
+                    else
+                    {
+                        log.DebugFormat("Interface not handled by inner object");
+                        return CustomQueryInterfaceResult.Failed;
+                    }
+                }
+
+            }
+            catch (Exception ex)
+            {
+                log.Error("Exception in ICustomQueryInterface", ex);
+                return CustomQueryInterfaceResult.Failed;
+            }
+
+        }
     }
 }

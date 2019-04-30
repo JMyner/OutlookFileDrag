@@ -10,14 +10,20 @@ namespace OutlookFileDrag
         public const int S_FALSE = 1;
 
         public const short CF_TEXT = 1;
-        public const short CF_HDROP = 15;
         public const short CF_UNICODETEXT = 13;
+        public const short CF_HDROP = 15;
 
         public const int DATA_S_SAMEFORMATETC = 0x00040130;
 
         public const int DRAGDROP_S_DROP = 0x00040100;
         public const int DRAGDROP_S_CANCEL = 0x00040101;
         public const int DRAGDROP_S_USEDEFAULTCURSORS = 0x00040102;
+
+        public const uint DROPEFFECT_NONE = 0;
+        public const uint DROPEFFECT_COPY = 1;
+        public const uint DROPEFFECT_MOVE = 2;
+        public const uint DROPEFFECT_LINK = 4;
+        public const uint DROPEFFECT_SCROLL = 0x80000000;
 
         public const int DV_E_LINDEX = unchecked((int)0x80040068);
         public const int DV_E_FORMATETC = unchecked((int)0x80040064);
@@ -31,34 +37,28 @@ namespace OutlookFileDrag
         public const int E_UNSPEC = E_FAIL;
         public const int E_UNEXPECTED = unchecked((int)0x8000FFFF);
 
-        public const int MK_LBUTTON = 0x0001;
-        public const int MK_RBUTTON = 0x0002;
-
-        public const int OLE_E_NOTRUNNING = unchecked((int)0x80040005);
-        public const int OLE_S_USEREG = unchecked((int)0x80040005);
-
-        public const int STG_E_MEDIUMFULL = unchecked((int)0x80030070);
+        public const int MAX_PATH = 260;
 
         [DllImport("ole32.dll")]
-        public static extern int DoDragDrop(NativeMethods.IDataObject pDataObj, NativeMethods.IDropSource pDropSource, uint dwOKEffects, uint[] pdwEffect);
+        public static extern int DoDragDrop(NativeMethods.IDataObject pDataObj, IntPtr pDropSource, uint dwOKEffects, out uint pdwEffect);
 
         [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
-        public static extern IntPtr GlobalLock(HandleRef handle);
+        public static extern IntPtr GlobalLock(IntPtr handle);
 
         [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
-        public static extern bool GlobalUnlock(HandleRef handle);
+        public static extern bool GlobalUnlock(IntPtr handle);
 
         [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
-        public static extern int GlobalSize(HandleRef handle);
+        public static extern int GlobalSize(IntPtr handle);
 
         [DllImport("ole32.dll", PreserveSig = false)]
         public static extern ILockBytes CreateILockBytesOnHGlobal(IntPtr hGlobal, bool fDeleteOnRelease);
 
-        [DllImport("ole32.dll", CharSet = CharSet.Auto, PreserveSig = false)]
-        public static extern IntPtr GetHGlobalFromILockBytes(ILockBytes pLockBytes);
-
         [DllImport("ole32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
         public static extern IStorage StgCreateDocfileOnILockBytes(ILockBytes plkbyt, uint grfMode, uint reserved);
+
+        [DllImport("ole32.dll")]
+        internal static extern void ReleaseStgMedium(ref STGMEDIUM medium);
 
         [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("0000000B-0000-0000-C000-000000000046")]
         public interface IStorage
@@ -132,7 +132,7 @@ namespace OutlookFileDrag
         public sealed class FILEGROUPDESCRIPTORA
         {
             public uint cItems;
-            public FILEDESCRIPTORA[] fgd;
+            //public FILEDESCRIPTORA[] fgd;
         }
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
@@ -156,7 +156,7 @@ namespace OutlookFileDrag
         public sealed class FILEGROUPDESCRIPTORW
         {
             public uint cItems;
-            public FILEDESCRIPTORW[] fgd;
+            //public FILEDESCRIPTORW[] fgd;
         }
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -202,7 +202,7 @@ namespace OutlookFileDrag
     
         [UnmanagedFunctionPointer(CallingConvention.StdCall, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.I4)]
-        public delegate int DragDropDelegate(NativeMethods.IDataObject pDataObj, NativeMethods.IDropSource pDropSource, uint dwOKEffects, uint[] pdwEffect);
+        public delegate int DragDropDelegate(NativeMethods.IDataObject pDataObj, IntPtr pDropSource, uint dwOKEffects, out uint pdwEffect);
 
     }
 }
